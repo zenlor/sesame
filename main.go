@@ -77,6 +77,11 @@ func main() {
 		return
 	}
 
+	cfg.Prefix = os.ExpandEnv(cfg.Prefix)
+	for idx,item := range cfg.Secrets {
+		cfg.Secrets[idx] = os.ExpandEnv(item)
+	}
+
 	ctx := context.Background()
 	awscfg, err := config.LoadDefaultConfig(ctx, config.WithDefaultsMode(aws.DefaultsModeInRegion))
 	if err != nil {
