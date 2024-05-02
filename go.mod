@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.26.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.11
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.50.0
-	gopkg.in/yaml.v2 v2.2.8
+	github.com/pelletier/go-toml/v2 v2.2.2
 )
 
 require (
