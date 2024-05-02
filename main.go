@@ -38,7 +38,7 @@ Example:
 `
 
 type Configuration struct {
-	Prefix string `toml:"prefix"`
+	Prefix  string   `toml:"prefix"`
 	Secrets []string `toml:"secrets"`
 }
 
@@ -46,7 +46,7 @@ var Version string
 var log *slog.Logger
 
 func main() {
-	flag.Usage = func() { fmt.Fprintf(os.Stderr, "%s\n", USAGE)}
+	flag.Usage = func() { fmt.Fprintf(os.Stderr, "%s\n", USAGE) }
 
 	if len(os.Args) == 1 {
 		flag.Usage()
@@ -56,7 +56,7 @@ func main() {
 
 	var (
 		verboseFlag, versionFlag, humanOutputFlag bool
-		configFilenameFlag string
+		configFilenameFlag                        string
 	)
 	flag.BoolVar(&versionFlag, "version", false, "show the current version")
 	flag.BoolVar(&verboseFlag, "v", false, "set verbose output")
@@ -85,7 +85,7 @@ func main() {
 	var logHandler slog.Handler
 	if humanOutputFlag && verboseFlag {
 		logHandler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-			Level: slog.LevelDebug,
+			Level:     slog.LevelDebug,
 			AddSource: true,
 		})
 	} else if humanOutputFlag {
@@ -94,7 +94,7 @@ func main() {
 		})
 	} else if verboseFlag {
 		logHandler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-			Level: slog.LevelDebug,
+			Level:     slog.LevelDebug,
 			AddSource: true,
 		})
 	} else {
@@ -118,7 +118,7 @@ func main() {
 
 	// Expand environment variables part of prefix or secrets
 	cfg.Prefix = os.ExpandEnv(cfg.Prefix)
-	for idx,item := range cfg.Secrets {
+	for idx, item := range cfg.Secrets {
 		cfg.Secrets[idx] = os.ExpandEnv(item)
 	}
 
@@ -136,7 +136,7 @@ func main() {
 	nextToken := ""
 	for {
 		data, err := client.GetParametersByPath(ctx, &ssm.GetParametersByPathInput{
-			Path: &cfg.Prefix,
+			Path:      &cfg.Prefix,
 			NextToken: aws.String(nextToken),
 			Recursive: aws.Bool(true),
 		})
@@ -180,6 +180,7 @@ func main() {
 }
 
 var parameterNameRx *regexp.Regexp = regexp.MustCompile("/([^/]+)$")
+
 func parameterToEnv(name *string) string {
 	return parameterNameRx.FindString(*name)
 }
