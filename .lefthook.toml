@@ -1,0 +1,10 @@
+[pre-commit.commands.vet]
+glob = "*.go"
+files = "git ls-files -m"
+run = "go vet {files}"
+
+[pre-commit.commands.fmt]
+glob = "*.go"
+run = "go fmt {staged_files}"
+stage_fixed = true
+
