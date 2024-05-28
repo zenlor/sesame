@@ -43,7 +43,6 @@ type Configuration struct {
 }
 
 var Version string
-var log *slog.Logger
 
 func main() {
 	flag.Usage = func() { fmt.Fprintf(os.Stderr, "%s\n", USAGE) }
@@ -77,7 +76,7 @@ func main() {
 	)
 
 	if versionFlag {
-		log.Info("sesame", "version", Version)
+		slog.Info("sesame", "version", Version)
 		os.Exit(0)
 		return
 	}
@@ -102,7 +101,7 @@ func main() {
 			Level: slog.LevelWarn,
 		})
 	}
-	log = slog.New(logHandler)
+	slog.SetDefault(slog.New(logHandler))
 
 	configData, err := os.ReadFile(configFilenameFlag)
 	if err != nil {
@@ -141,7 +140,7 @@ func main() {
 			Recursive: aws.Bool(true),
 		})
 		if err != nil {
-			log.Error("error fetching parameters by path", "err", err)
+			slog.Error("error fetching parameters by path", "err", err)
 			continue
 		}
 
@@ -163,7 +162,7 @@ func main() {
 			Names: chunk,
 		})
 		if err != nil {
-			log.Error("error fetching parameters", "err", err)
+			slog.Error("error fetching parameters", "err", err)
 			continue
 		}
 		for _, param := range data.Parameters {
