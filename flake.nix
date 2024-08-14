@@ -1,7 +1,7 @@
 {
-  description = "";
+  description = "sesame SSM parameter environment injector";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
     flakelight.url = "github:nix-community/flakelight";
     flakelight.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -14,6 +14,7 @@
       pkgs.go
       pkgs.gopls
       pkgs.lefthook
+      pkgs.act
     ];
   };
 }

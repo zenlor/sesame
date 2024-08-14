@@ -1,0 +1,89 @@
+name: build OCI container
+
+on:
+  push:
+    branches: ['release']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io/${{github.repository_owner}}
+  IMAGE_NAME: "sesame"
+
+permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      sha: ${{ steps.meta.outputs.sha }}
+    steps:
+      - name: meta
+        uses: actions/github-script@v7
+        id: meta
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const ref = context.ref.split("/")
+            const sha = context.sha.substr(0, 6)
+            const tag = ref[1] == "tags" ? ref[2] : sha
+            core.notice(`tag: ${tag}, sha: ${sha}`)
+            core.setOutput("tag", tag)
+            core.setOutput("sha", sha)
+
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y buildah podman qemu-user-static
+
+      - name: podman login
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io/${{github.repository_owner}}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: build with Buildah
+        uses: redhat-actions/buildah-build@v2
+        id: build
+        with:
+          oci: true
+          layers: true
+          archs: arm64,amd64
+          containerfiles: ./Containerfile
+          image: ${{ env.IMAGE_NAME }}
+          extra-args: |
+            --cache-to=${{env.REGISTRY}}/${{ env.IMAGE_NAME }}
+            --cache-from=${{env.REGISTRY}}/${{ env.IMAGE_NAME }}
+          tags: >
+            latest
+            ${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.sha}}
+
+      - name: Push To registry
+        id: push
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build.outputs.image }}
+          registry: ${{ env.REGISTRY }}
+          tags: ${{ steps.build.outputs.tags }}
+
+      - name: meta
+        run: |
+          {
+            echo -e '## push results*:'
+            echo -e '```'
+            echo -e '${{ steps.push.outputs.registry-paths }}'
+            echo -e '```'
+            echo -e '|  **oci container tags**  |'
+            echo -e '| :---: |'
+            echo -e '| latest                        |'
+            echo -e '| ${{ inputs.environment }}     |'
+            echo -e '| ${{ steps.meta.outputs.tag }} |'
+            echo -e '| ${{ steps.meta.outputs.sha }} |'
+          } > $GITHUB_STEP_SUMMARY

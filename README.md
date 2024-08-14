@@ -37,20 +37,55 @@ CMD ["/app", "-x"]
 
 # Configuration file
 
-All configuration values will be parsed and expanded with the current
-environment variables. In the example below, the command has access to
-`$PROJECT`, `$ENVIRONMENT` and `$SERVICE_NAME` environment variables. The
-resulting calls to the AWS API will be, for example,
-`proj/production/web-api-01`
+> **important**: All `prefixes` and `secrets` will be expanded with the current
+> environment.
+
+In the example below, the command has access to `$PROJECT`, `$ENVIRONMENT` and
+`$SERVICE_NAME` environment variables. The resulting calls to the AWS API will
+be, for example, `proj/production/web-api-01`.
 
 ```toml
-prefix = "$PROJECT/$ENVIRONMENT/$SERVICE_NAME"
+prefixes = [
+    "$PROJECT/$ENVIRONMENT/$SERVICE_NAME"
+]
 secrets = [
     "$PROJECT/$ENVIRONMENT/$SERVICE_NAME/DB_USER",
     "$PROJECT/$ENVIRONMENT/$SERVICE_NAME/DB_PASSWORD",
     "$PROJECT/$ENVIRONMENT/$SERVICE_NAME/API_SECRET",
     "$PROJECT/$ENVIRONMENT/$SERVICE_NAME/API_CERTIFICATE",
 ]
+
+[[rename]]
+from = 'DB_USER'
+to = 'USERNAME'
+```
+
+## prefixes
+
+The list of prefixes that the application will query on SSM Parameter Store. 
+
+
+## rename
+
+List of variables to rename `from` the incoming name, `to` a new name. In the
+previous example the secret `DB_USER` is renamed `USERNAME`
+
+# Usage in containers
+
+Import the sesame container, build your application, take the `/sesame` binary
+file and, finally, prepare your build and runtime containers.
+
+```Containerfile
+FROM ghcr.io/zenlor/sesame:latest AS sesame
+FROM golang:1.22-alpine AS build
+ADD . .
+RUN go build -o /app
+FROM scratch
+COPY --from=sesame /sesame /sesame
+COPY --from=build /app /app
+ADD sesame.toml /sesame.toml
+ENTRYPOINT ["/sesame","-c","/sesame.toml","--"]
+CMD ["/app"]
 ```
 
 # LICENSE

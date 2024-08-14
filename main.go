@@ -37,9 +37,15 @@ Example:
 
 `
 
+type Rename struct {
+	From string `toml:"from"`
+	To   string `toml:"to"`
+}
+
 type Configuration struct {
-	Prefix  string   `toml:"prefix"`
+	Prefix  []string `toml:"prefix"`
 	Secrets []string `toml:"secrets"`
+	Rename  []Rename `toml:"rename"`
 }
 
 var Version string
@@ -116,7 +122,10 @@ func main() {
 	}
 
 	// Expand environment variables part of prefix or secrets
-	cfg.Prefix = os.ExpandEnv(cfg.Prefix)
+	for idx, item := range cfg.Prefix {
+		cfg.Prefix[idx] = os.ExpandEnv(item)
+	}
+
 	for idx, item := range cfg.Secrets {
 		cfg.Secrets[idx] = os.ExpandEnv(item)
 	}
@@ -133,25 +142,28 @@ func main() {
 	client := ssm.NewFromConfig(awscfg)
 
 	nextToken := ""
+	nextPrefix := 0
 	for {
 		data, err := client.GetParametersByPath(ctx, &ssm.GetParametersByPathInput{
-			Path:      &cfg.Prefix,
+			Path:      &cfg.Prefix[nextPrefix],
 			NextToken: aws.String(nextToken),
 			Recursive: aws.Bool(true),
 		})
 		if err != nil {
 			slog.Error("error fetching parameters by path", "err", err)
-			continue
+			os.Exit(1)
 		}
 
 		for _, param := range data.Parameters {
-			name := parameterToEnv(param.Name)
+			name := parameterToEnv(*param.Name, cfg)
 			env = append(env, fmt.Sprintf("%s=%s", name, *param.Value))
 		}
 
 		if *data.NextToken != "" {
 			nextToken = *data.NextToken
 			continue
+		} else if nextPrefix < len(cfg.Prefix) {
+			nextPrefix += 1
 		}
 		break
 	}
@@ -166,7 +178,7 @@ func main() {
 			continue
 		}
 		for _, param := range data.Parameters {
-			name := parameterToEnv(param.Name)
+			name := parameterToEnv(*param.Name, cfg)
 			env = append(env, fmt.Sprintf("%s=%s", name, *param.Value))
 		}
 	}
@@ -180,8 +192,15 @@ func main() {
 
 var parameterNameRx *regexp.Regexp = regexp.MustCompile("/([^/]+)$")
 
-func parameterToEnv(name *string) string {
-	return parameterNameRx.FindString(*name)
+func parameterToEnv(name string, config Configuration) string {
+	param := parameterNameRx.FindString(name)
+
+	for _, r := range config.Rename {
+		if r.From == param {
+			return r.To
+		}
+	}
+	return param
 }
 
 // chunked, split a slice in multiple slices containing up to 10 elements of
