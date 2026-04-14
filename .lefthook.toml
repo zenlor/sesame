@@ -2,9 +2,11 @@
 glob = "*.go"
 files = "git ls-files -m"
 run = "go vet {files}"
+exclude = "vendor"
 
 [pre-commit.commands.fmt]
 glob = "*.go"
 run = "go fmt {staged_files}"
 stage_fixed = true
+exclude = "vendor"
 
