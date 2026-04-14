@@ -1,6 +1,6 @@
 module git.sr.ht/~zenlor/sesame
 
-go 1.21.9
+go 1.25.0
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.26.1
