@@ -47,12 +47,6 @@ var Version string
 func main() {
 	flag.Usage = func() { fmt.Fprintf(os.Stderr, "%s\n", USAGE) }
 
-	if len(os.Args) == 1 {
-		flag.Usage()
-		os.Exit(0)
-		return
-	}
-
 	var (
 		verboseFlag, versionFlag, humanOutputFlag bool
 		configFilenameFlag                        string
@@ -67,18 +61,21 @@ func main() {
 	flag.Parse()
 
 	argv := flag.Args()
+	if len(argv) == 0 {
+		flag.Usage()
+		os.Exit(0)
+	}
 
 	slog.Debug("flags",
 		"version", versionFlag,
 		"human", humanOutputFlag,
-		"confg", configFilenameFlag,
+		"config", configFilenameFlag,
 		"argv", argv,
 	)
 
 	if versionFlag {
 		slog.Info("sesame", "version", Version)
 		os.Exit(0)
-		return
 	}
 
 	var logHandler slog.Handler
@@ -111,11 +108,10 @@ func main() {
 
 	var cfg Configuration
 	if err := toml.Unmarshal(configData, &cfg); err != nil {
-		slog.Error("unmashaling toml configuration", "err", err)
+		slog.Error("unmarshaling toml configuration", "err", err)
 		return
 	}
 
-	// Expand environment variables part of prefix or secrets
 	cfg.Prefix = os.ExpandEnv(cfg.Prefix)
 	for idx, item := range cfg.Secrets {
 		cfg.Secrets[idx] = os.ExpandEnv(item)
@@ -129,49 +125,54 @@ func main() {
 	}
 
 	env := os.Environ()
-
 	client := ssm.NewFromConfig(awscfg)
 
 	nextToken := ""
 	for {
 		data, err := client.GetParametersByPath(ctx, &ssm.GetParametersByPathInput{
-			Path:      &cfg.Prefix,
-			NextToken: aws.String(nextToken),
-			Recursive: aws.Bool(true),
+			Path:           &cfg.Prefix,
+			NextToken:      aws.String(nextToken),
+			Recursive:      aws.Bool(true),
+			WithDecryption: aws.Bool(true),
 		})
 		if err != nil {
 			slog.Error("error fetching parameters by path", "err", err)
-			continue
+			break
 		}
 
 		for _, param := range data.Parameters {
+			if param.Value == nil {
+				continue
+			}
 			name := parameterToEnv(param.Name)
 			env = append(env, fmt.Sprintf("%s=%s", name, *param.Value))
 		}
 
-		if *data.NextToken != "" {
+		if data.NextToken != nil && *data.NextToken != "" {
 			nextToken = *data.NextToken
 			continue
 		}
 		break
 	}
 
-	// Secrets, requested in batches of max 10 paths
 	for _, chunk := range chunked(cfg.Secrets) {
 		data, err := client.GetParameters(ctx, &ssm.GetParametersInput{
-			Names: chunk,
+			Names:          chunk,
+			WithDecryption: aws.Bool(true),
 		})
 		if err != nil {
 			slog.Error("error fetching parameters", "err", err)
 			continue
 		}
 		for _, param := range data.Parameters {
+			if param.Value == nil {
+				continue
+			}
 			name := parameterToEnv(param.Name)
 			env = append(env, fmt.Sprintf("%s=%s", name, *param.Value))
 		}
 	}
 
-	// exec(1) and give up control
 	if err := syscall.Exec(argv[0], argv[1:], env); err != nil {
 		slog.Error("error executing command", "cmd", argv, "err", err)
 		os.Exit(1)
@@ -181,28 +182,26 @@ func main() {
 var parameterNameRx *regexp.Regexp = regexp.MustCompile("/([^/]+)$")
 
 func parameterToEnv(name *string) string {
-	return parameterNameRx.FindString(*name)
+	if name == nil {
+		return ""
+	}
+	if m := parameterNameRx.FindStringSubmatch(*name); len(m) > 1 {
+		return m[1]
+	}
+	return ""
 }
 
-// chunked, split a slice in multiple slices containing up to 10 elements of
-// the original slice. The input slice is modified.
 func chunked(slice []string) [][]string {
 	chunkSize := 10
 	var chunks [][]string
-	for {
-		if len(slice) == 0 {
-			break
-		}
-
-		// necessary check to avoid slicing beyond
-		// slice capacity
+	for len(slice) != 0 {
 		if len(slice) < chunkSize {
 			chunkSize = len(slice)
 		}
-
-		chunks = append(chunks, slice[0:chunkSize])
+		c := make([]string, chunkSize)
+		copy(c, slice[:chunkSize])
+		chunks = append(chunks, c)
 		slice = slice[chunkSize:]
 	}
-
 	return chunks
 }
